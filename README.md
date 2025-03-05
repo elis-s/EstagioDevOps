@@ -1,13 +1,19 @@
-# EstagioDevOps
-1.Análise Técnica do Código Terraform:
+Documentação Terraform - Projeto VExpenses
+Objetivo
+Este projeto demonstra a criação de uma infraestrutura básica na AWS utilizando Terraform, com o objetivo de provisionar uma instância EC2, VPC, Subnet, Internet Gateway e regras de segurança. A infraestrutura é configurada para rodar o servidor Nginx automaticamente na instância EC2, além de aplicar melhorias de segurança para acesso SSH.
 
-	. Provider AWS: configuração de região.
+1. Análise Técnica do Código Terraform
+1.1 Provider AWS
+O código inicia com a configuração do provider AWS, onde é definida a região da AWS para o provisionamento dos recursos.
 
 provider "aws" {
   region = "us-east-1"
 }
+1.2 Variáveis
+São definidas duas variáveis para facilitar a personalização do código:
 
-	. Variáveis: projeto e candidato.
+projeto: Nome do projeto (default: "VExpenses")
+candidato: Nome do candidato (default: "SeuNome")
 
 variable "projeto" {
   description = "Nome do projeto"
@@ -20,8 +26,9 @@ variable "candidato" {
   type        = string
   default     = "SeuNome"
 }
+1.3 Chave SSH
+Uma chave privada RSA é gerada para acesso SSH à instância EC2. A chave pública é usada para criar o par de chaves na AWS, garantindo o acesso seguro à instância.
 
-	. Chave SSH: o Terraform cria uma chave privada RSA (tls_private_key) e um par de chaves SSH na AWS 	(aws_key_pair), que será usada para acessar a instância EC2.
 
 resource "tls_private_key" "ec2_key" {
   algorithm = "RSA"
@@ -32,8 +39,9 @@ resource "aws_key_pair" "ec2_key_pair" {
   key_name   = "${var.projeto}-${var.candidato}-key"
   public_key = tls_private_key.ec2_key.public_key_openssh
 }
+1.4 VPC
+Criação de uma VPC com CIDR 10.0.0.0/16, permitindo segmentação e controle de tráfego de rede.
 
-	. VPC: criação de uma VPC com o CIDR 10.0.0.0/16. Essa VPC vai permitir a segmentação e o controle do tráfego de rede.
 
 resource "aws_vpc" "main_vpc" {
   cidr_block           = "10.0.0.0/16"
@@ -43,8 +51,9 @@ resource "aws_vpc" "main_vpc" {
     Name = "${var.projeto}-${var.candidato}-vpc"
   }
 }
+1.5 Subnet
+Criação de uma subnet pública dentro da VPC, com CIDR 10.0.1.0/24, associada à zona de disponibilidade us-east-1a.
 
-	. Subnet: Uma subnet pública é criada dentro da VPC, com o CIDR 10.0.1.0/24 e associada à zona de disponibilidade us-east-1a. A 	subnet permite a alocação de instâncias EC2 que estarão acessíveis pela internet.
 
 resource "aws_subnet" "main_subnet" {
   vpc_id            = aws_vpc.main_vpc.id
@@ -54,8 +63,9 @@ resource "aws_subnet" "main_subnet" {
     Name = "${var.projeto}-${var.candidato}-subnet"
   }
 }
+1.6 Internet Gateway (IGW)
+Configuração de um Internet Gateway para permitir o tráfego de entrada e saída da VPC para a internet.
 
-	. Internet Gateway (IGW): o IGW é configurado para permitir o tráfego de entrada e saída da VPC para a internet, permitindo que 	as instâncias EC2 dentro da subnet possam se comunicar com o exterior.
 
 resource "aws_internet_gateway" "main_igw" {
   vpc_id = aws_vpc.main_vpc.id
@@ -63,8 +73,9 @@ resource "aws_internet_gateway" "main_igw" {
     Name = "${var.projeto}-${var.candidato}-igw"
   }
 }
+1.7 Tabela de Roteamento e Associações
+Criação de uma tabela de rotas para definir o tráfego de saída para qualquer destino (0.0.0.0/0) via o Internet Gateway, além de associar a tabela à subnet criada.
 
-	. Route Table e Associações: a criação de uma tabela de rotas que define o tráfego de saída para qualquer destino (0.0.0.0/0) 	via o IGW. Esta tabela é associada à subnet para garantir que o tráfego possa circular entre a instância EC2 e a internet.
 
 resource "aws_route_table" "main_route_table" {
   vpc_id = aws_vpc.main_vpc.id
@@ -77,34 +88,53 @@ resource "aws_route_table" "main_route_table" {
   }
 }
 
-	. Security Group: o Security Group permite o acesso SSH na porta 22 de qualquer IP (o que pode ser considerado um risco de 	segurança) e permite todo o tráfego de saída.
+resource "aws_route_table_association" "main_association" {
+  subnet_id      = aws_subnet.main_subnet.id
+  route_table_id = aws_route_table.main_route_table.id
+  tags = {
+    Name = "${var.projeto}-${var.candidato}-route_table_association"
+  }
+}
+1.8 Security Group
+O Security Group define as regras de acesso. Inicialmente, ele permite SSH na porta 22 de qualquer IP, o que pode representar um risco de segurança. O tráfego HTTP (porta 80) também é permitido para permitir o acesso ao Nginx.
+
 
 resource "aws_security_group" "main_sg" {
   name        = "${var.projeto}-${var.candidato}-sg"
-  description = "Permitir SSH de qualquer lugar e todo o tráfego de saída"
+  description = "Permitir SSH e HTTP"
   vpc_id      = aws_vpc.main_vpc.id
+
   ingress {
-    description      = "Allow SSH from anywhere"
+    description      = "Allow SSH from specific IP"
     from_port        = 22
     to_port          = 22
     protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
+    cidr_blocks      = ["<seu-ip-publico>/32"]
   }
+
+  ingress {
+    description      = "Allow HTTP from anywhere"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
   egress {
     description      = "Allow all outbound traffic"
     from_port        = 0
     to_port          = 0
     protocol         = "-1"
     cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
   }
+
   tags = {
     Name = "${var.projeto}-${var.candidato}-sg"
   }
 }
+1.9 Instância EC2
+Criação de uma instância EC2 do tipo t2.micro, utilizando a imagem Debian 12, configurada com 20 GB de disco e a chave SSH gerada.
 
-	. Instância EC2: uma instância EC2 do tipo t2.micro é criada utilizando a imagem mais recente do Debian 12. A instância é 	configurada para ter um volume de disco de 20 GB, com o acesso público habilitado e associada à chave SSH criada.
 
 resource "aws_instance" "debian_ec2" {
   ami             = data.aws_ami.debian12.id
@@ -113,29 +143,46 @@ resource "aws_instance" "debian_ec2" {
   key_name        = aws_key_pair.ec2_key_pair.key_name
   security_groups = [aws_security_group.main_sg.name]
   associate_public_ip_address = true
+
   root_block_device {
     volume_size           = 20
     volume_type           = "gp2"
     delete_on_termination = true
   }
+
   user_data = <<-EOF
               #!/bin/bash
               apt-get update -y
               apt-get upgrade -y
+              apt-get install -y nginx
+              systemctl start nginx
+              systemctl enable nginx
               EOF
+
   tags = {
     Name = "${var.projeto}-${var.candidato}-ec2"
   }
 }
+1.10 Outputs
+Ao final, o código gera dois outputs:
 
-OBSERVAÇÕES: 
-. O código cria uma infraestrutura simples na AWS, com uma instância EC2 na VPC, e com acesso SSH.
-. A segurança da instância EC2 pode ser aprimorada, já que no código atual o permite SSH de qualquer lugar.
+private_key: A chave privada RSA para acesso à instância EC2.
+ec2_public_ip: O IP público da instância EC2.
 
-2. Modificação e Melhoria do Código Terraform: 
+output "private_key" {
+  description = "Chave privada para acessar a instância EC2"
+  value       = tls_private_key.ec2_key.private_key_pem
+  sensitive   = true
+}
 
-	. Restringir o Acesso SSH: uma melhoria importante seria restringir o acesso SSH (porta 22) a IPs específicos, como o seu IP 	público, ao invés de permitir de qualquer lugar.
-	A segurança de uma instância EC2 pode ser comprometida quando o acesso SSH é permitido de qualquer endereço IP. Essa 	configuração abre a porta 22 para ataques de força bruta e outras ameaças. Ao restringir o acesso SSH ao seu IP público	minimiza significativamente o risco de acesso não autorizado, garantindo que apenas usuários conhecidos possam acessar a 	instância.
+output "ec2_public_ip" {
+  description = "Endereço IP público da instância EC2"
+  value       = aws_instance.debian_ec2.public_ip
+}
+2. Modificações e Melhorias Implementadas
+2.1 Restringir Acesso SSH
+A principal melhoria de segurança foi restringir o acesso SSH à instância EC2 para um IP específico, em vez de permitir o acesso de qualquer IP.
+
 
 ingress {
   description      = "Allow SSH from specific IP"
@@ -144,9 +191,11 @@ ingress {
   protocol         = "tcp"
   cidr_blocks      = ["<SEU_IP_PUBLICO>/32"]
 }
+Justificativa: Isso reduz o risco de ataques de força bruta e aumenta a segurança, permitindo o acesso SSH apenas de locais confiáveis.
 
-	. Automação da Instalação do Nginx: automatização da instalação do Nginx com o user_data para a EC2.
-	A automação da instalação do Nginx elimina a necessidade de intervenção manual após o provisionamento da instância EC2, 	melhorando a eficiência e a consistência. Isso é útil em ambientes de produção e quando se trabalha com múltiplas 	instâncias, pois permite que o processo seja repetido de forma automatizada.
+2.2 Automação da Instalação do Nginx
+A instalação do Nginx foi automatizada com o uso do user_data, que roda um script bash para instalar o Nginx assim que a instância EC2 for criada.
+
 
 user_data = <<-EOF
             #!/bin/bash
@@ -156,11 +205,11 @@ user_data = <<-EOF
             systemctl start nginx
             systemctl enable nginx
             EOF
+Justificativa: A automação facilita a replicação e garante consistência em ambientes de produção, eliminando a necessidade de intervenção manual.
 
-MELHORIA EXTRA:
+2.3 Regras de Segurança para Nginx
+Uma regra foi adicionada para permitir tráfego HTTP (porta 80) de qualquer IP, permitindo que a instância EC2 possa fornecer serviços web.
 
-	. Adicionar Regras de Segurança para Nginx:  liberando a porta 80 para tráfego HTTP.
-	O Nginx foi instalado para fornecer serviços web (HTTP), e para que os usuários possam acessar a página inicial do servidor, é 	necessário liberar a porta 80. Sem essa regra, o tráfego HTTP seria bloqueado pelo Security Group, tornando o servidor 	inacessível via navegador. Liberar a porta 80 para qualquer IP é comum em servidores web, já que o objetivo é permitir acesso 	público.
 
 ingress {
   description      = "Allow HTTP from anywhere"
@@ -169,8 +218,10 @@ ingress {
   protocol         = "tcp"
   cidr_blocks      = ["0.0.0.0/0"]
 }
+Justificativa: O servidor Nginx deve ser acessível via HTTP, e essa regra permite que os usuários externos possam acessar o conteúdo web servido pela instância.
 
-ARQUIVO MODIFICADO:
+Arquivo Terraform Modificado
+O arquivo main.tf modificado, contendo todas as alterações acima, está disponível abaixo:
 
 provider "aws" {
   region = "us-east-1"
