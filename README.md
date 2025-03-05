@@ -341,4 +341,47 @@ output "ec2_public_ip" {
 }
 
 
+Instruções de Uso:
+
+Pré-requisitos
+Antes de executar o código Terraform, certifique-se de ter os seguintes pré-requisitos instalados:
+
+Terraform: A versão recomendada para este projeto é a 1.0 ou superior.
+
+Para instalar o Terraform, siga as instruções oficiais: https://learn.hashicorp.com/tutorials/terraform/install-cli
+AWS CLI: O Terraform interage com a AWS através da CLI.
+	
+O primeiro passo é inicializar o Terraform para baixar os plugins necessários e configurar o ambiente de trabalho. Execute o seguinte comando no diretório onde está o arquivo main.tf:
+	terraform init
+Esse comando inicializa o diretório de trabalho do Terraform e baixa todos os provedores e módulos necessários.
+
+3. Verifique o Plano de Execução
+Antes de aplicar qualquer modificação, é importante revisar o que será criado, alterado ou destruído na AWS. Para isso, use o comando terraform plan:
+	terraform plan
+Esse comando mostrará o que o Terraform irá criar, modificar ou destruir na infraestrutura da AWS com base no código no arquivo main.tf.
+
+4. Aplique a Configuração
+Para criar a infraestrutura conforme o código, utilize o comando terraform apply. Esse comando criará todos os recursos necessários na AWS (VPC, subnets, EC2, etc.):
+	terraform apply
+O Terraform pedirá uma confirmação antes de aplicar as mudanças. Digite yes para continuar.
+Durante o processo de aplicação, a AWS provisionará os recursos descritos no arquivo Terraform, incluindo uma instância EC2 com Nginx instalado automaticamente.
+
+5. Verifique a Infraestrutura Criada
+Após a aplicação ser concluída, você pode verificar os recursos criados na AWS Console:
+
+EC2: A instância EC2 será criada na subnet pública e terá o Nginx instalado e rodando.
+VPC e Subnet: A infraestrutura de rede será configurada conforme o código.
+Security Groups: Um grupo de segurança será criado permitindo acesso SSH de um IP específico (no caso, você configurou para um IP público) e acesso HTTP (porta 80).
+Para obter o IP público da instância EC2, execute o seguinte comando:
+	terraform output ec2_public_ip
+Esse comando retornará o endereço IP público da instância EC2.
+
+6. Acesse a Instância EC2
+Com o IP público da instância EC2 em mãos, você pode acessar a instância via SSH usando a chave privada gerada no processo (seu arquivo .pem da chave SSH). Use o seguinte comando para acessar a instância:
+	ssh -i /caminho/para/sua-chave.pem ubuntu@<ec2_public_ip>
+
+7. Destrua a Infraestrutura
+Quando terminar de testar a infraestrutura, você pode destruir todos os recursos criados para não incorrer em custos adicionais. Use o comando abaixo para destruir todos os recursos provisionados:
+	terraform destroy
+O Terraform pedirá uma confirmação. Digite yes para confirmar e destruir a infraestrutura.
 
